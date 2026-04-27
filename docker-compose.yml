@@ -1,0 +1,38 @@
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    container_name: gigantic-dashboard
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-gigantic}:${DB_PASSWORD:-gigantic_dev}@db:5432/${DB_NAME:-gigantic}
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: gigantic-db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-gigantic}
+      POSTGRES_USER: ${DB_USER:-gigantic}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-gigantic_dev}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-gigantic} -d ${DB_NAME:-gigantic}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -1,0 +1,17 @@
+node_modules
+.pnpm-store
+dist
+build
+.svelte-kit
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+.vscode/
+.idea/
+coverage
+drizzle/.snapshot
+
+# Docker volumes / local data
+pgdata/
