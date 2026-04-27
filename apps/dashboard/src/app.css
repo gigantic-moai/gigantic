@@ -1,0 +1,82 @@
+@import 'tailwindcss';
+
+@theme {
+  /* ── 색상 (모아이 다크 테마) ─────────────────────────── */
+  --color-bg-base: #0e0e10;
+  --color-bg-surface: #16161a;
+  --color-bg-elevated: #1c1c22;
+  --color-bg-hover: #232329;
+
+  --color-border-subtle: #27272f;
+  --color-border-default: #33333d;
+
+  --color-text-primary: #ececf1;
+  --color-text-secondary: #9b9ba6;
+  --color-text-muted: #65656f;
+
+  --color-accent: #c8a44e;
+  --color-accent-hover: #d6b35e;
+  --color-accent-muted: #c8a44e33;
+
+  --color-status-todo: #6b7280;
+  --color-status-progress: #3b82f6;
+  --color-status-review: #c8a44e;
+  --color-status-done: #10b981;
+
+  /* ── 폰트 ───────────────────────────────────────────── */
+  --font-sans: 'Noto Sans KR', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+
+  /* ── 사이드바 폭 ────────────────────────────────────── */
+  --spacing-sidebar: 240px;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+    background-color: var(--color-bg-base);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  *,
+  *::before,
+  *::after {
+    border-color: var(--color-border-subtle);
+  }
+
+  ::selection {
+    background-color: var(--color-accent-muted);
+    color: var(--color-accent-hover);
+  }
+
+  code,
+  pre,
+  kbd {
+    font-family: var(--font-mono);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-bg-base);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-default);
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-bg-hover);
+  }
+}
