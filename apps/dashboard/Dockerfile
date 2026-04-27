@@ -22,7 +22,10 @@ RUN pnpm --filter @gigantic/dashboard build
 
 # ── Runtime ──────────────────────────────────────────────
 FROM node:20-alpine AS runtime
-RUN corepack enable
+# tsx is needed at runtime to execute migrate.ts (a TS file). pnpm hoists tsx
+# under apps/dashboard/node_modules/.pnpm/, which Node's loader can't resolve
+# when invoked via `--import tsx` from /app. Install it globally instead.
+RUN corepack enable && npm install -g tsx@4
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
@@ -31,12 +34,11 @@ ENV NODE_ENV=production \
 COPY --from=build /repo/apps/dashboard/build ./build
 COPY --from=build /repo/apps/dashboard/package.json ./package.json
 COPY --from=build /repo/apps/dashboard/drizzle ./drizzle
-COPY --from=build /repo/apps/dashboard/drizzle.config.ts ./drizzle.config.ts
-COPY --from=build /repo/apps/dashboard/src/lib/server/db/migrate.ts ./migrate.ts
+COPY --from=build /repo/apps/dashboard/src/lib/server/db/migrate.mjs ./migrate.mjs
 COPY --from=build /repo/packages/shared ./node_modules/@gigantic/shared
 COPY --from=build /repo/apps/dashboard/node_modules ./node_modules
 
 EXPOSE 3000
 
 # Run migrations (idempotent) before booting the server.
-CMD ["sh", "-c", "node --import tsx ./migrate.ts && node build"]
+CMD ["sh", "-c", "node ./migrate.mjs && node build"]

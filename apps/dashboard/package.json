@@ -10,7 +10,7 @@
     "start": "node build",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/lib/server/db/migrate.ts",
+    "db:migrate": "node src/lib/server/db/migrate.mjs",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },
@@ -31,7 +31,6 @@
     "svelte": "^5.16.0",
     "svelte-check": "^4.1.1",
     "tailwindcss": "^4.0.0",
-    "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "vite": "^6.0.5"
   }

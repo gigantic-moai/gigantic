@@ -18,7 +18,7 @@ async function main() {
   await migrationClient.end();
 }
 
-function maskUrl(url: string): string {
+function maskUrl(url) {
   return url.replace(/(:\/\/[^:]+:)([^@]+)(@)/, '$1***$3');
 }
 
