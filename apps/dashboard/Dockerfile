@@ -1,5 +1,6 @@
-# syntax=docker/dockerfile:1.7
 # Build context expected: monorepo root.
+# Plain Dockerfile syntax — no BuildKit-only features, so this works with both
+# the legacy builder and BuildKit/buildx.
 
 # ── Base ─────────────────────────────────────────────────
 FROM node:20-alpine AS base
@@ -11,8 +12,7 @@ FROM base AS deps
 COPY pnpm-workspace.yaml package.json ./
 COPY apps/dashboard/package.json apps/dashboard/
 COPY packages/shared/package.json packages/shared/
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile=false
+RUN pnpm install --frozen-lockfile=false
 
 # ── Build ────────────────────────────────────────────────
 FROM deps AS build
