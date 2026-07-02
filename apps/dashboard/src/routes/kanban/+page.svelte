@@ -1,12 +1,16 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import type { Issue, IssueStatus } from '@gigantic/shared';
+	import IssueModal from '$lib/components/IssueModal.svelte';
 	import MoaiAvatar from '$lib/components/MoaiAvatar.svelte';
 	import { toast } from '$lib/stores/toast';
 	import { issueKeyNum, timeAgo } from '$lib/utils';
-	import { Lock, ShieldAlert, Sun, ThumbsDown, ThumbsUp } from '@lucide/svelte';
+	import { Lock, Pencil, Plus, ShieldAlert, Sun, ThumbsDown, ThumbsUp } from '@lucide/svelte';
 
 	let { data } = $props();
+
+	/** null = 닫힘, 'new' = 생성, Issue = 편집 */
+	let issueModal = $state<Issue | 'new' | null>(null);
 
 	const COLUMNS: { key: IssueStatus; label: string; hint: string }[] = [
 		{ key: 'todo', label: 'To Do', hint: '밤이 되면 에이전트가 가져갑니다' },
@@ -98,6 +102,9 @@
 					<option value={a.id}>🗿 {a.persona.name}</option>
 				{/each}
 			</select>
+			<button class="btn-gold flex items-center gap-1.5 px-3.5 py-2 text-xs" onclick={() => (issueModal = 'new')}>
+				<Plus size={13} /> 이슈 추가
+			</button>
 		</div>
 	</header>
 
@@ -145,7 +152,18 @@
 								{#if issue.uassets.length > 0}
 									<span title={`배타적 잠금: ${issue.uassets.join(', ')}`}><Lock size={11} class="text-warn" /></span>
 								{/if}
-								<span class="ml-auto text-[9px] text-moai-dim">{timeAgo(issue.updatedAt)}</span>
+								<span class="ml-auto text-[9px] text-moai-dim group-hover:hidden">{timeAgo(issue.updatedAt)}</span>
+								<button
+									class="ml-auto hidden text-moai-dim group-hover:inline-flex hover:text-moai-gold"
+									title="이슈 편집"
+									aria-label={`${issue.key} 편집`}
+									onclick={(e) => {
+										e.stopPropagation();
+										issueModal = issue;
+									}}
+								>
+									<Pencil size={12} />
+								</button>
 							</div>
 							<h3 class="mt-1.5 text-xs leading-snug font-semibold">{issue.title}</h3>
 							<div class="mt-2 flex flex-wrap gap-1">
@@ -201,3 +219,12 @@
 		{/each}
 	</div>
 </div>
+
+{#if issueModal !== null}
+	<IssueModal
+		issue={issueModal === 'new' ? null : issueModal}
+		issues={data.issues}
+		agents={data.agents}
+		onclose={() => (issueModal = null)}
+	/>
+{/if}

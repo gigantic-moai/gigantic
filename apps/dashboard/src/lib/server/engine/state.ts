@@ -61,7 +61,7 @@ export interface EngineState {
 }
 
 /** 상태 스키마가 바뀌면 올린다 — HMR로 살아남은 구버전 싱글턴을 폐기 */
-const ENGINE_VERSION = 4;
+const ENGINE_VERSION = 6;
 
 /** 시드에서 초기 엔진 상태를 만든다. .env 값이 있으면 초기 설정에 반영. */
 export function buildSeedState(): EngineState {
@@ -241,6 +241,144 @@ class Engine {
 	}
 
 	/* ── 칸반 (D-2) ──────────────────────────────── */
+
+	/** 전문 태그 매칭으로 담당 에이전트 자동 결정 — 겹치는 태그가 가장 많은 온보딩 완료 에이전트 */
+	private autoAssign(tags: string[]): Agent | undefined {
+		const lower = tags.map((t) => t.toLowerCase());
+		const eligible = this.state.agents.filter(
+			(a) => a.onboarding.step >= 7 && a.status !== 'paused'
+		);
+		let best: Agent | undefined;
+		let bestScore = 0;
+		for (const agent of eligible) {
+			const score = agent.persona.tags.filter((t) => lower.includes(t.toLowerCase())).length;
+			const load = this.state.issues.filter(
+				(i) => i.assigneeId === agent.id && i.status !== 'done'
+			).length;
+			const bestLoad = best
+				? this.state.issues.filter((i) => i.assigneeId === best!.id && i.status !== 'done').length
+				: Infinity;
+			if (score > bestScore || (score === bestScore && score > 0 && load < bestLoad)) {
+				best = agent;
+				bestScore = score;
+			}
+		}
+		return bestScore > 0 ? best : undefined;
+	}
+
+	/** 열린 이슈와 .uasset 배타적 잠금이 겹치는 이슈 키 목록 (충돌 사전 분석) */
+	private uassetConflicts(uassets: string[], excludeId?: string): string[] {
+		if (uassets.length === 0) return [];
+		return this.state.issues
+			.filter(
+				(i) =>
+					i.id !== excludeId &&
+					i.status !== 'done' &&
+					i.uassets.some((u) => uassets.includes(u))
+			)
+			.map((i) => i.key);
+	}
+
+	addIssue(input: {
+		title: string;
+		description: string;
+		priority: Issue['priority'];
+		tags: string[];
+		deps: string[];
+		expectedFiles: string[];
+		uassets: string[];
+		assigneeId?: string; // 'auto' | 에이전트 id | undefined(미할당)
+	}): { issue: Issue; autoAssigned?: string; conflicts: string[] } {
+		const nextNum =
+			Math.max(0, ...this.state.issues.map((i) => parseInt(i.key.match(/(\d+)$/)?.[1] ?? '0', 10))) + 1;
+		let assigneeId = input.assigneeId;
+		let autoAssigned: string | undefined;
+		if (assigneeId === 'auto') {
+			const agent = this.autoAssign(input.tags);
+			assigneeId = agent?.id;
+			autoAssigned = agent?.persona.name;
+		}
+		const now = new Date().toISOString();
+		const issue: Issue = {
+			id: this.nextId('i'),
+			key: `GIG-${nextNum}`,
+			title: input.title,
+			description: input.description,
+			priority: input.priority,
+			tags: input.tags,
+			deps: input.deps.filter((d) => this.state.issues.some((i) => i.id === d)),
+			expectedFiles: input.expectedFiles,
+			uassets: input.uassets,
+			assigneeId,
+			status: 'todo',
+			createdAt: now,
+			updatedAt: now
+		};
+		this.state.issues.push(issue);
+		this.changed('issues');
+		return { issue, autoAssigned, conflicts: this.uassetConflicts(issue.uassets, issue.id) };
+	}
+
+	updateIssue(
+		id: string,
+		patch: {
+			title?: string;
+			description?: string;
+			priority?: Issue['priority'];
+			tags?: string[];
+			deps?: string[];
+			expectedFiles?: string[];
+			uassets?: string[];
+			/** null = 미할당으로 변경, undefined = 변경 없음 */
+			assigneeId?: string | null;
+		}
+	): { ok: boolean; conflicts: string[] } {
+		const issue = this.state.issues.find((i) => i.id === id);
+		if (!issue) return { ok: false, conflicts: [] };
+		if (patch.title !== undefined) issue.title = patch.title;
+		if (patch.description !== undefined) issue.description = patch.description;
+		if (patch.priority !== undefined) issue.priority = patch.priority;
+		if (patch.tags !== undefined) issue.tags = patch.tags;
+		if (patch.expectedFiles !== undefined) issue.expectedFiles = patch.expectedFiles;
+		if (patch.uassets !== undefined) issue.uassets = patch.uassets;
+		if (patch.deps !== undefined) {
+			issue.deps = patch.deps.filter((d) => d !== id && this.state.issues.some((i) => i.id === d));
+		}
+		if (patch.assigneeId !== undefined) {
+			const next = patch.assigneeId ?? undefined;
+			if (issue.assigneeId && issue.assigneeId !== next) {
+				const prev = this.state.agents.find((a) => a.id === issue.assigneeId);
+				if (prev?.currentIssueId === id) {
+					prev.currentIssueId = undefined;
+					prev.progress = undefined;
+				}
+			}
+			issue.assigneeId = next;
+		}
+		issue.updatedAt = new Date().toISOString();
+		this.changed('issues');
+		return { ok: true, conflicts: this.uassetConflicts(issue.uassets, issue.id) };
+	}
+
+	deleteIssue(id: string): { ok: boolean; reason?: string } {
+		const issue = this.state.issues.find((i) => i.id === id);
+		if (!issue) return { ok: false, reason: '이슈를 찾을 수 없습니다' };
+		if (issue.changelistId) {
+			return { ok: false, reason: '연결된 changelist가 있는 이슈는 삭제할 수 없습니다 — 리뷰창에서 먼저 처리하세요' };
+		}
+		this.state.issues = this.state.issues.filter((i) => i.id !== id);
+		for (const other of this.state.issues) {
+			other.deps = other.deps.filter((d) => d !== id);
+		}
+		const agent = this.state.agents.find((a) => a.currentIssueId === id);
+		if (agent) {
+			agent.currentIssueId = undefined;
+			agent.progress = undefined;
+			agent.activity = '다음 스케줄 대기';
+		}
+		this.changed('issues');
+		return { ok: true };
+	}
 
 	moveIssue(issueId: string, status: IssueStatus) {
 		const issue = this.state.issues.find((i) => i.id === issueId);
