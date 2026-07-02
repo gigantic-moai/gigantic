@@ -11,6 +11,7 @@ services:
       - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U gigantic']
       interval: 5s
@@ -23,22 +24,39 @@ services:
       dockerfile: apps/dashboard/Dockerfile
     environment:
       DATABASE_URL: postgres://gigantic:gigantic@db:5432/gigantic
-      P4PORT: ${P4PORT}
-      P4USER: ${P4USER}
-      P4DEPOT: ${P4DEPOT}
+      P4PORT: ${P4PORT:-}
+      P4USER: ${P4USER:-}
+      P4DEPOT: ${P4DEPOT:-}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-}
+      ORCHESTRATOR_PORT: 4000
     ports:
       - '${DASHBOARD_PORT:-3000}:3000'
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/overview >/dev/null || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
-  # orchestrator (Core) — Bridge 트랙 (B-1 ~ B-7)에서 구현됩니다.
-  # orchestrator:
-  #   build:
-  #     context: .
-  #     dockerfile: apps/bridge/Dockerfile
-  #   ports:
-  #     - '4000:4000'
+  # 🔌 UE 런타임 브릿지 (오케스트레이터) — Bridge Track
+  orchestrator:
+    build:
+      context: .
+      dockerfile: apps/bridge/Dockerfile
+    environment:
+      ORCHESTRATOR_PORT: 4000
+    ports:
+      - '${ORCHESTRATOR_PORT:-4000}:4000'
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:4000/status >/dev/null || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
 volumes:
   pgdata:

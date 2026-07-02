@@ -18,12 +18,22 @@ export const LLM_PROVIDERS: Record<LlmProvider, { label: string; defaultModel: s
 	custom: { label: '사내 커스텀 엔드포인트', defaultModel: '' }
 };
 
+/** 머지 순서 정책 — 승인된 changelist가 머지 큐에서 처리되는 순서 */
+export type MergePolicy = 'finish-order' | 'priority';
+
+export const MERGE_POLICY_META: Record<MergePolicy, { label: string; hint: string }> = {
+	'finish-order': { label: '먼저 끝난 순서', hint: '승인된 순서 그대로 머지 (FIFO)' },
+	priority: { label: '이슈 우선순위 순서', hint: 'P0 → P1 → P2, 같은 우선순위면 승인 순' }
+};
+
 export interface GiganticSettings {
 	/** Perforce 연결 — 하드 디펜던시 */
 	p4: {
 		port: string;
 		user: string;
 		depot: string;
+		/** 자격 증명은 서버에만 저장 — 클라이언트에는 설정 여부만 노출 */
+		passwordSet: boolean;
 	};
 	/** 로컬/네트워크 경로 */
 	paths: {
@@ -52,6 +62,12 @@ export interface GiganticSettings {
 	network: {
 		dashboardPort: number;
 		orchestratorPort: number;
+	};
+	/** 워크플로 정책 */
+	workflow: {
+		mergePolicy: MergePolicy;
+		/** 온보딩 분석 깊이 — 0이면 전체 히스토리, 아니면 최근 N개월 */
+		onboardingMonths: number;
 	};
 	/** 대시보드 테마 */
 	theme: {

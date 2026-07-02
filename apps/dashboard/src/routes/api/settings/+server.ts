@@ -5,6 +5,6 @@ import type { RequestHandler } from './$types';
 export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.json();
 	const engine = await getEngine();
-	engine.updateSettings(body.settings ?? {}, body.apiKey);
+	engine.updateSettings(body.settings ?? {}, { apiKey: body.apiKey, p4Password: body.p4Password });
 	return json({ ok: true, settings: engine.state.settings });
 };

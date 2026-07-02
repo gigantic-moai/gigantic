@@ -57,11 +57,13 @@ export interface EngineState {
 		buildsToday: { total: number; failed: number };
 		recentMerges: MergeRecord[];
 	};
+	/** 승인 후 머지를 기다리는 changelist id — 순서는 머지 정책이 결정 (PA-05) */
+	mergeQueue: string[];
 	seq: number;
 }
 
 /** 상태 스키마가 바뀌면 올린다 — HMR로 살아남은 구버전 싱글턴을 폐기 */
-const ENGINE_VERSION = 6;
+const ENGINE_VERSION = 7;
 
 /** 시드에서 초기 엔진 상태를 만든다. .env 값이 있으면 초기 설정에 반영. */
 export function buildSeedState(): EngineState {
@@ -86,7 +88,22 @@ export function buildSeedState(): EngineState {
 		contracts: structuredClone(seedContracts),
 		scrum: structuredClone(seedScrum),
 		kpi: structuredClone(seedKpi),
+		mergeQueue: [],
 		seq: 1000
+	};
+}
+
+/** DB에서 복원한 설정에 이후 추가된 필드의 기본값을 채운다 */
+export function withSettingsDefaults(loaded: GiganticSettings): GiganticSettings {
+	const d = seedSettings;
+	return {
+		p4: { ...d.p4, ...loaded.p4 },
+		paths: { ...d.paths, ...loaded.paths },
+		ci: { ...d.ci, ...loaded.ci },
+		llm: { ...d.llm, ...loaded.llm },
+		network: { ...d.network, ...loaded.network },
+		workflow: { ...d.workflow, ...(loaded.workflow ?? {}) },
+		theme: { ...d.theme, ...loaded.theme }
 	};
 }
 
@@ -106,12 +123,22 @@ class Engine {
 		return this.db?.mode ?? 'memory';
 	}
 
+	/** 현재 머지 진행 중인 CL (프로세스 로컬 — 재시작 시 큐에서 재개) */
+	private merging: string | null = null;
+
 	constructor(db: DbHandle | null, state: EngineState) {
 		this.db = db;
 		this.state = state;
+		// 재시작 복구 — 승인됐지만 아직 머지되지 않은 CL을 큐에 되살린다
+		const approved = state.changelists.filter((c) => c.status === 'approved').map((c) => c.id);
+		state.mergeQueue = [
+			...state.mergeQueue.filter((id) => approved.includes(id)),
+			...approved.filter((id) => !state.mergeQueue.includes(id))
+		];
 		this.timer = setInterval(() => this.tick(), 8000);
 		// Node가 이 타이머 때문에 종료를 막지 않도록
 		if (typeof this.timer === 'object' && 'unref' in this.timer) this.timer.unref();
+		if (state.mergeQueue.length > 0) this.processMergeQueue();
 	}
 
 	/**
@@ -478,37 +505,10 @@ class Engine {
 				};
 			}
 			cl.status = 'approved';
+			// 머지 큐 등록 — 순서는 환경설정의 머지 정책이 결정
+			if (!this.state.mergeQueue.includes(cl.id)) this.state.mergeQueue.push(cl.id);
 			this.changed('reviews');
-			// 머지 시뮬레이션 — 승인 3초 후 메인 머지 + 통합 빌드 (PA-05)
-			const timer = setTimeout(() => {
-				cl.status = 'merged';
-				if (issue) {
-					issue.status = 'done';
-					issue.updatedAt = new Date().toISOString();
-				}
-				if (agent) {
-					agent.stats.issuesDone += 1;
-					if (agent.currentIssueId === issue?.id) {
-						agent.currentIssueId = undefined;
-						agent.progress = undefined;
-					}
-				}
-				this.state.kpi.recentMerges.unshift({
-					changelistNumber: cl.number,
-					title: cl.title,
-					agentId: cl.agentId,
-					mergedAt: new Date().toISOString(),
-					buildStatus: 'success'
-				});
-				this.state.kpi.recentMerges = this.state.kpi.recentMerges.slice(0, 12);
-				this.changed('reviews');
-				this.broadcast({
-					type: 'toast',
-					message: `CL ${cl.number} 메인 머지 완료 — 통합 빌드 통과`,
-					kind: 'ok'
-				});
-			}, 3000);
-			if (typeof timer === 'object' && 'unref' in timer) timer.unref();
+			this.processMergeQueue();
 			return { ok: true };
 		}
 
@@ -533,6 +533,69 @@ class Engine {
 		}
 		this.changed('reviews');
 		return { ok: true };
+	}
+
+	/** 머지 정책에 따라 정렬된 큐 — 리뷰창이 대기 순번 표시에 사용 */
+	mergeOrder(): string[] {
+		const queue = [...this.state.mergeQueue];
+		if (this.state.settings.workflow.mergePolicy !== 'priority') return queue; // 먼저 끝난 순서
+		const prio = (clId: string): string => {
+			const cl = this.state.changelists.find((c) => c.id === clId);
+			const issue = this.state.issues.find((i) => i.id === cl?.issueId);
+			return issue?.priority ?? 'p1';
+		};
+		return queue
+			.map((id, idx) => ({ id, idx }))
+			.sort((a, b) => prio(a.id).localeCompare(prio(b.id)) || a.idx - b.idx)
+			.map((x) => x.id);
+	}
+
+	/** 큐에서 한 건씩 메인 머지 + 통합 빌드 시뮬레이션 (PA-05) */
+	private processMergeQueue() {
+		if (this.merging) return;
+		const next = this.mergeOrder()[0];
+		if (!next) return;
+		const cl = this.state.changelists.find((c) => c.id === next);
+		if (!cl || cl.status !== 'approved') {
+			this.state.mergeQueue = this.state.mergeQueue.filter((id) => id !== next);
+			this.processMergeQueue();
+			return;
+		}
+		this.merging = next;
+		const timer = setTimeout(() => {
+			cl.status = 'merged';
+			const issue = cl.issueId ? this.state.issues.find((i) => i.id === cl.issueId) : undefined;
+			const agent = this.state.agents.find((a) => a.id === cl.agentId);
+			if (issue) {
+				issue.status = 'done';
+				issue.updatedAt = new Date().toISOString();
+			}
+			if (agent) {
+				agent.stats.issuesDone += 1;
+				if (agent.currentIssueId === issue?.id) {
+					agent.currentIssueId = undefined;
+					agent.progress = undefined;
+				}
+			}
+			this.state.kpi.recentMerges.unshift({
+				changelistNumber: cl.number,
+				title: cl.title,
+				agentId: cl.agentId,
+				mergedAt: new Date().toISOString(),
+				buildStatus: 'success'
+			});
+			this.state.kpi.recentMerges = this.state.kpi.recentMerges.slice(0, 12);
+			this.state.mergeQueue = this.state.mergeQueue.filter((id) => id !== cl.id);
+			this.merging = null;
+			this.changed('reviews');
+			this.broadcast({
+				type: 'toast',
+				message: `CL ${cl.number} 메인 머지 완료 — 통합 빌드 통과`,
+				kind: 'ok'
+			});
+			this.processMergeQueue(); // 다음 대기 건
+		}, 3000);
+		if (typeof timer === 'object' && 'unref' in timer) timer.unref();
 	}
 
 	/* ── 지식 (§6) ───────────────────────────────── */
@@ -755,22 +818,26 @@ class Engine {
 
 	/* ── 환경설정 ─────────────────────────────────── */
 
-	updateSettings(patch: Partial<GiganticSettings>, apiKey?: string) {
+	updateSettings(
+		patch: Partial<GiganticSettings>,
+		secrets?: { apiKey?: string; p4Password?: string }
+	) {
 		const s = this.state.settings;
-		if (patch.p4) s.p4 = { ...s.p4, ...patch.p4 };
+		if (patch.p4) s.p4 = { ...s.p4, ...patch.p4, passwordSet: s.p4.passwordSet };
 		if (patch.paths) s.paths = { ...s.paths, ...patch.paths };
 		if (patch.ci) s.ci = { ...s.ci, ...patch.ci };
 		if (patch.network) s.network = { ...s.network, ...patch.network };
+		if (patch.workflow) s.workflow = { ...s.workflow, ...patch.workflow };
 		if (patch.theme) s.theme = { ...s.theme, ...patch.theme };
 		if (patch.llm) {
 			// apiKeySet은 서버가 결정 — 클라이언트 값은 무시
 			s.llm = { ...s.llm, ...patch.llm, apiKeySet: s.llm.apiKeySet };
 		}
-		if (apiKey !== undefined && apiKey !== '') {
-			// mock: 키 원문은 저장하지 않고 설정 여부만 기록 (실서비스는 서버 시크릿 스토어)
-			s.llm.apiKeySet = true;
-		}
+		// mock: 시크릿 원문은 저장하지 않고 설정 여부만 기록 (실서비스는 서버 시크릿 스토어)
+		if (secrets?.apiKey) s.llm.apiKeySet = true;
+		if (secrets?.p4Password) s.p4.passwordSet = true;
 		this.changed('settings');
+		this.processMergeQueue(); // 정책이 바뀌면 대기 순서 재평가
 	}
 
 	togglePause(agentId: string) {
@@ -798,6 +865,8 @@ async function boot(): Promise<Engine> {
 
 	const existing = await loadState(handle.db);
 	if (existing) {
+		// 이후 버전에서 추가된 설정 필드는 기본값으로 채운다
+		existing.settings = withSettingsDefaults(existing.settings);
 		console.log(`[gigantic] DB(${handle.mode})에서 상태 복원 완료`);
 		return new Engine(handle, existing);
 	}

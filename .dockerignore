@@ -1,0 +1,14 @@
+.git
+node_modules
+**/node_modules
+**/.svelte-kit
+**/build
+**/dist
+.data
+**/.data
+.env
+**/.env
+.claude
+.github
+*.md
+!apps/bridge/README.md

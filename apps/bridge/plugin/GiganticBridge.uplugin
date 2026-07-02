@@ -1,0 +1,20 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "Gigantic Bridge",
+	"Description": "Two-way bridge between the Unreal editor and Gigantic agents: editor commands, runtime state, build pipeline, log streaming. Debugging (DAP) is provided by the external Quilla debugger.",
+	"Category": "Programming",
+	"CreatedBy": "Gigantic (Moai)",
+	"CreatedByURL": "https://github.com/gigantic-moai/gigantic",
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"Installed": true,
+	"Modules": [
+		{
+			"Name": "GiganticBridge",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		}
+	]
+}

@@ -18,25 +18,35 @@
 	const agentOf = (id: string) => data.agents.find((a) => a.id === id);
 	const issueOf = (id?: string) => data.issues.find((i) => i.id === id);
 
-	const GROUPS: { label: string; statuses: Changelist['status'][]; hint?: string }[] = [
+	const policyLabel = $derived(
+		data.mergePolicy === 'priority' ? '이슈 우선순위 순서' : '먼저 끝난 순서'
+	);
+
+	const GROUPS = $derived<{ label: string; statuses: Changelist['status'][]; hint?: string }[]>([
 		{ label: '리뷰 대기', statuses: ['open'], hint: '아침의 당신을 기다리는 목록' },
 		{ label: '머지 차단 — 계약 위반', statuses: ['blocked'], hint: '사람이 발견하기 전에 기계가 잡았습니다' },
 		{ label: '수정 요청됨', statuses: ['changes-requested'] },
-		{ label: '승인 · 머지됨', statuses: ['approved', 'merged'] },
+		{ label: '승인 · 머지됨', statuses: ['approved', 'merged'], hint: `머지 정책: ${policyLabel}` },
 		{ label: '반려됨', statuses: ['rejected'] }
-	];
+	]);
 
-	const statusMeta = (s: Changelist['status']) =>
-		(
+	const statusMeta = (cl: Changelist) => {
+		if (cl.status === 'approved') {
+			const pos = data.mergeOrder.indexOf(cl.id);
+			return pos > 0
+				? { label: `머지 큐 #${pos + 1} 대기`, class: 'text-info' }
+				: { label: '머지 중', class: 'text-info' };
+		}
+		return (
 			({
 				open: { label: '리뷰 대기', class: 'text-moai-gold' },
-				approved: { label: '머지 중', class: 'text-info' },
 				merged: { label: '머지됨', class: 'text-ok' },
 				rejected: { label: '반려', class: 'text-danger' },
 				'changes-requested': { label: '수정 요청', class: 'text-warn' },
 				blocked: { label: '머지 차단', class: 'text-danger' }
 			}) as Record<string, { label: string; class: string }>
-		)[s];
+		)[cl.status];
+	};
 </script>
 
 <svelte:head><title>리뷰창 · Gigantic 🗿</title></svelte:head>
@@ -61,7 +71,7 @@
 					{#each items as cl (cl.id)}
 						{@const agent = agentOf(cl.agentId)}
 						{@const issue = issueOf(cl.issueId)}
-						{@const meta = statusMeta(cl.status)}
+						{@const meta = statusMeta(cl)}
 						<a href={`/review/${cl.id}`} class="flex items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-moai-hover">
 							<span class="w-16 shrink-0 font-mono text-xs font-bold text-moai-gold">CL {cl.number}</span>
 							<div class="min-w-0 flex-1">

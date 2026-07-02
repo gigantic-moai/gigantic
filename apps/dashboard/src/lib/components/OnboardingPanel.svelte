@@ -1,11 +1,16 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import type { Agent } from '@gigantic/shared';
 	import { KNOWLEDGE_CATEGORY_META, ONBOARDING_STEPS, type KnowledgeCategory } from '@gigantic/shared';
 	import { toast } from '$lib/stores/toast';
 	import { Check, Loader2, CircleDashed, GraduationCap } from '@lucide/svelte';
 
 	let { agent }: { agent: Agent } = $props();
+
+	/** 온보딩 분석 깊이 (환경설정) — 0이면 전체 히스토리 */
+	const depthMonths = $derived(Number(page.data.settings?.workflow?.onboardingMonths ?? 0));
+	const depthLabel = $derived(depthMonths === 0 ? '전체 히스토리' : `최근 ${depthMonths}개월`);
 
 	let busy = $state(false);
 
@@ -78,6 +83,7 @@
 	{#if agent.onboarding.changesetsAnalyzed}
 		<div class="mt-3 text-[11px] text-moai-muted">
 			정독한 changeset: <span class="font-mono font-semibold text-moai-text">{agent.onboarding.changesetsAnalyzed.toLocaleString()}</span>개
+			<span class="ml-2 text-moai-dim">· 분석 깊이: {depthLabel}</span>
 		</div>
 	{/if}
 

@@ -6,6 +6,7 @@
 		Columns3,
 		Globe2,
 		GitFork,
+		LogOut,
 		SearchCode,
 		BookOpen,
 		MessagesSquare,
@@ -80,6 +81,18 @@
 				<Settings size={15} />
 				<span class="flex-1 text-left">환경설정</span>
 			</button>
+			{#if data.authEnabled}
+				<button
+					class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-[13px] text-moai-muted transition-colors hover:bg-moai-hover hover:text-moai-text"
+					onclick={async () => {
+						await fetch('/api/logout', { method: 'POST' });
+						location.href = '/login';
+					}}
+				>
+					<LogOut size={15} />
+					<span class="flex-1 text-left">로그아웃</span>
+				</button>
+			{/if}
 		</div>
 		<div class="border-t border-moai-border px-5 py-3.5 text-[10px] text-moai-dim">
 			<div class="flex items-center gap-1.5">

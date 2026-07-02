@@ -66,6 +66,30 @@ Regenerate after schema changes with `pnpm --filter @gigantic/dashboard db:gener
 In production (`node server.js`, used by the Docker image) a custom entry wraps the
 SvelteKit handler and serves the realtime WebSocket at `/ws`.
 
+## Deployment
+
+`docker compose up -d` starts three services:
+
+| Service | Port | Notes |
+|---|---|---|
+| `dashboard` | 3000 | SvelteKit app (`node server.js`, `/ws` realtime) |
+| `db` | 5432 | PostgreSQL 16 (volume `pgdata`) |
+| `orchestrator` | 4000 | UE runtime bridge — `/status` + WS `/bridge` protocol |
+
+All services have healthchecks and `restart: unless-stopped`. Configure via `.env`:
+
+- `DASHBOARD_PASSWORD` — set it to require a login (unset = open, for on-prem trusted networks)
+- `P4PORT` / `P4USER` / `P4DEPOT` — initial Perforce settings (editable later in the dashboard)
+
+The UE bridge plugin installs with:
+
+```bash
+unrealbridge install --engine "/path/to/UE5"   # copies GiganticBridge.uplugin
+```
+
+CI (GitHub Actions) runs typecheck, production build, a bridge smoke test,
+and builds both Docker images on every push/PR to `main`.
+
 ## Repository layout
 
 ```

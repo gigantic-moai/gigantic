@@ -1,3 +1,4 @@
+import { env } from '$env/dynamic/private';
 import { getEngine } from '$lib/server/engine/state';
 import type { LayoutServerLoad } from './$types';
 
@@ -7,6 +8,7 @@ export const load: LayoutServerLoad = async () => {
 	return {
 		settings: state.settings,
 		storage: engine.storageMode,
+		authEnabled: Boolean(env.DASHBOARD_PASSWORD),
 		nav: {
 			pendingReviews: state.changelists.filter((c) =>
 				['open', 'blocked', 'changes-requested'].includes(c.status)

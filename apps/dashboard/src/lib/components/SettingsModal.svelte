@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
-	import type { GiganticSettings, LlmProvider } from '@gigantic/shared';
-	import { LLM_PROVIDERS, THEME_ACCENTS, type ThemeAccent } from '@gigantic/shared';
+	import type { BridgeStatus, GiganticSettings, LlmProvider, MergePolicy } from '@gigantic/shared';
+	import { LLM_PROVIDERS, MERGE_POLICY_META, THEME_ACCENTS, type ThemeAccent } from '@gigantic/shared';
 	import Modal from './Modal.svelte';
 	import { applyTheme, previewTheme } from '$lib/theme';
 	import { toast } from '$lib/stores/toast';
@@ -9,10 +9,13 @@
 		Cpu,
 		FolderCog,
 		GitBranch,
+		GitMerge,
 		KeyRound,
+		Loader2,
 		Moon,
 		Network,
 		Palette,
+		PlugZap,
 		Sun,
 		Wrench
 	} from '@lucide/svelte';
@@ -23,10 +26,25 @@
 	// svelte-ignore state_referenced_locally -- 모달 오픈 시점 스냅샷이 의도된 동작
 	let local = $state<GiganticSettings>(structuredClone($state.snapshot(settings)));
 	let apiKeyInput = $state('');
+	let p4PasswordInput = $state('');
 	let busy = $state(false);
+	let bridgeChecking = $state(false);
+	let bridgeResult = $state<{ connected: boolean; port: number; status?: BridgeStatus } | null>(null);
 
 	const providers = Object.keys(LLM_PROVIDERS) as LlmProvider[];
 	const accents = Object.keys(THEME_ACCENTS) as ThemeAccent[];
+	const policies = Object.keys(MERGE_POLICY_META) as MergePolicy[];
+
+	async function checkBridge() {
+		bridgeChecking = true;
+		try {
+			bridgeResult = await (await fetch('/api/bridge')).json();
+		} catch {
+			bridgeResult = { connected: false, port: local.network.orchestratorPort };
+		} finally {
+			bridgeChecking = false;
+		}
+	}
 
 	function setTheme(patch: Partial<GiganticSettings['theme']>) {
 		local.theme = { ...local.theme, ...patch };
@@ -46,7 +64,8 @@
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
 					settings: $state.snapshot(local),
-					apiKey: apiKeyInput || undefined
+					apiKey: apiKeyInput || undefined,
+					p4Password: p4PasswordInput || undefined
 				})
 			});
 			if (!res.ok) {
@@ -135,6 +154,16 @@
 			<div class="sm:col-span-2">
 				{@render field('P4DEPOT', '에이전트가 작업할 depot 뷰', true, () => local.p4.depot, (v) => (local.p4.depot = v))}
 			</div>
+			<label class="flex flex-col gap-1 text-xs sm:col-span-2">
+				<span class="flex items-center gap-1.5 font-semibold"><KeyRound size={11} /> P4 비밀번호 / 티켓</span>
+				<input
+					type="password"
+					class="rounded-md border border-moai-border-strong bg-moai-bg px-3 py-2 font-mono text-[11px] outline-none focus:border-moai-gold"
+					placeholder={local.p4.passwordSet ? '●●●●●●●● 설정됨 — 변경하려면 새 값 입력' : 'P4PASSWD 또는 로그인 티켓'}
+					bind:value={p4PasswordInput}
+				/>
+				<span class="text-[10px] text-moai-dim">자격 증명은 서버에만 저장되며 대시보드에 다시 표시되지 않습니다</span>
+			</label>
 		</div>
 
 		<!-- 경로 -->
@@ -185,8 +214,45 @@
 			</label>
 		</div>
 
-		<!-- 포트 -->
-		{@render sectionHeader(Network, '포트', '컨테이너 재시작 후 적용됩니다')}
+		<!-- 워크플로 -->
+		{@render sectionHeader(GitMerge, '워크플로', '머지 순서와 온보딩 분석 깊이')}
+		<div class="grid gap-3 sm:grid-cols-2">
+			<div class="flex flex-col gap-1.5 text-xs">
+				<span class="font-semibold">머지 순서 정책</span>
+				{#each policies as p (p)}
+					<label class="flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 {local.workflow.mergePolicy === p ? 'border-moai-gold bg-moai-gold-faint' : 'border-moai-border-strong hover:bg-moai-hover'}">
+						<input
+							type="radio"
+							name="merge-policy"
+							value={p}
+							checked={local.workflow.mergePolicy === p}
+							onchange={() => (local.workflow.mergePolicy = p)}
+							style="accent-color: var(--color-moai-gold)"
+						/>
+						<span>
+							<span class="font-semibold">{MERGE_POLICY_META[p].label}</span>
+							<span class="mt-0.5 block text-[10px] text-moai-dim">{MERGE_POLICY_META[p].hint}</span>
+						</span>
+					</label>
+				{/each}
+			</div>
+			<label class="flex h-fit flex-col gap-1 text-xs">
+				<span class="font-semibold">온보딩 분석 깊이</span>
+				<select
+					bind:value={local.workflow.onboardingMonths}
+					class="rounded-md border border-moai-border-strong bg-moai-bg px-2.5 py-2 outline-none focus:border-moai-gold"
+				>
+					<option value={0}>전체 히스토리</option>
+					<option value={3}>최근 3개월</option>
+					<option value={6}>최근 6개월</option>
+					<option value={12}>최근 12개월</option>
+				</select>
+				<span class="text-[10px] text-moai-dim">에이전트 온보딩 시 정독할 changeset 범위</span>
+			</label>
+		</div>
+
+		<!-- 포트 / 브릿지 -->
+		{@render sectionHeader(Network, '포트 · UE 브릿지', '포트는 컨테이너 재시작 후 적용됩니다')}
 		<div class="grid gap-3 sm:grid-cols-2">
 			<label class="flex flex-col gap-1 text-xs">
 				<span class="font-semibold">대시보드 포트</span>
@@ -199,7 +265,7 @@
 				/>
 			</label>
 			<label class="flex flex-col gap-1 text-xs">
-				<span class="font-semibold">오케스트레이터 포트</span>
+				<span class="font-semibold">오케스트레이터(브릿지) 포트</span>
 				<input
 					type="number"
 					min="1"
@@ -208,6 +274,25 @@
 					bind:value={local.network.orchestratorPort}
 				/>
 			</label>
+			<div class="flex items-center gap-2.5 rounded-lg border border-moai-border bg-moai-surface px-3 py-2.5 sm:col-span-2">
+				<PlugZap size={14} class="shrink-0 text-info" />
+				<button class="btn-ghost px-3 py-1.5 text-[11px]" disabled={bridgeChecking} onclick={checkBridge}>
+					{#if bridgeChecking}<Loader2 size={11} class="inline animate-spin" />{/if}
+					브릿지 연결 확인
+				</button>
+				{#if bridgeResult}
+					{#if bridgeResult.connected}
+						<span class="text-[11px] text-ok">
+							● 연결됨 — {bridgeResult.status?.service} v{bridgeResult.status?.version}
+							(에디터 {bridgeResult.status?.editors ?? 0}대, :{bridgeResult.port})
+						</span>
+					{:else}
+						<span class="text-[11px] text-moai-dim">
+							○ 오프라인 — :{bridgeResult.port}에서 응답 없음. <span class="font-mono">pnpm --filter @gigantic/bridge dev</span>
+						</span>
+					{/if}
+				{/if}
+			</div>
 		</div>
 	</div>
 

@@ -8,3 +8,4 @@ export * from './types/scrum';
 export * from './types/kpi';
 export * from './types/project';
 export * from './types/settings';
+export * from './types/bridge';

@@ -224,7 +224,8 @@ export const seedSettings: GiganticSettings = {
 	p4: {
 		port: 'ssl:perforce.company.com:1666',
 		user: 'gigantic-agent',
-		depot: '//project/main/...'
+		depot: '//project/main/...',
+		passwordSet: true
 	},
 	paths: {
 		ueEngine: 'C:\\Program Files\\Epic Games\\UE_5.6',
@@ -244,6 +245,10 @@ export const seedSettings: GiganticSettings = {
 	network: {
 		dashboardPort: 3000,
 		orchestratorPort: 4000
+	},
+	workflow: {
+		mergePolicy: 'finish-order',
+		onboardingMonths: 0 // 전체 히스토리
 	},
 	theme: {
 		mode: 'dark',

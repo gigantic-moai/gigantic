@@ -3,5 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "UE Runtime Bridge — orchestrator, onboarding engine, parallelizer, knowledge engine, UE connector (Bridge Track B-1 ~ B-7)"
+  "description": "UE Runtime Bridge — orchestrator core, mock UE connector, parallelizer, onboarding/knowledge engines (Bridge Track B-1 ~ B-7)",
+  "bin": {
+    "unrealbridge": "./bin/unrealbridge.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@gigantic/shared": "workspace:*",
+    "tsx": "^4.19.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.8.0"
+  }
 }

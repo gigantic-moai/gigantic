@@ -151,7 +151,7 @@ export async function persistAll(db: GiganticDb, state: EngineState): Promise<vo
 			{ id: 'settings', data: state.settings },
 			{ id: 'project', data: state.project },
 			{ id: 'kpi', data: state.kpi },
-			{ id: 'meta', data: { seq: state.seq } }
+			{ id: 'meta', data: { seq: state.seq, mergeQueue: state.mergeQueue } }
 		]);
 	});
 }
@@ -174,11 +174,14 @@ export async function loadState(db: GiganticDb): Promise<EngineState | null> {
 
 	const opt = <T>(v: T | null): T | undefined => v ?? undefined;
 
+	const meta = byId.get('meta') as { seq: number; mergeQueue?: string[] };
+
 	return {
 		settings: byId.get('settings') as EngineState['settings'],
 		project: byId.get('project') as EngineState['project'],
 		kpi: byId.get('kpi') as EngineState['kpi'],
-		seq: (byId.get('meta') as { seq: number }).seq,
+		seq: meta.seq,
+		mergeQueue: meta.mergeQueue ?? [],
 		agents: agents.map((a) => ({
 			id: a.id,
 			persona: a.persona,
