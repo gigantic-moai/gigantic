@@ -3,7 +3,7 @@ import type { OverviewKpis } from '@gigantic/shared';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-	const { state } = getEngine();
+	const { state } = await getEngine();
 	const kpis: OverviewKpis = {
 		openIssues: state.issues.filter((i) => i.status !== 'done').length,
 		activeAgents: state.agents.filter((a) => ['night-work', 'day-watch'].includes(a.status)).length,

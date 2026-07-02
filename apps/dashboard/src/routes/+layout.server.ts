@@ -2,9 +2,11 @@ import { getEngine } from '$lib/server/engine/state';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async () => {
-	const { state } = getEngine();
+	const engine = await getEngine();
+	const { state } = engine;
 	return {
 		settings: state.settings,
+		storage: engine.storageMode,
 		nav: {
 			pendingReviews: state.changelists.filter((c) =>
 				['open', 'blocked', 'changes-requested'].includes(c.status)

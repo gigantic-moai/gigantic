@@ -9,6 +9,6 @@ export const POST: RequestHandler = async ({ request }) => {
 	if (!persona?.name || !persona?.role) {
 		return json({ ok: false, reason: '이름과 역할은 필수입니다' }, { status: 400 });
 	}
-	const agent = getEngine().spawnAgent(persona, body.schedule);
+	const agent = (await getEngine()).spawnAgent(persona, body.schedule);
 	return json({ ok: true, agent });
 };

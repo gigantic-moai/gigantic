@@ -50,8 +50,21 @@ pnpm install
 pnpm dev          # → http://localhost:5173
 ```
 
-Without `DATABASE_URL`, the dashboard runs on a built-in in-memory mock engine
-(seeded agents, issues, changelists, scrum logs) — ideal for development and demos.
+### Storage modes
+
+The dashboard picks its storage from `DATABASE_URL` (Drizzle ORM, same schema everywhere):
+
+| `DATABASE_URL` | Mode | Use case |
+|---|---|---|
+| *(unset)* | In-memory mock engine | Demos — reseeds on restart |
+| `pglite://.data/gigantic` | Embedded Postgres ([PGlite](https://pglite.dev)) | Local dev with persistence, no server needed |
+| `postgres://…` | PostgreSQL 16 | Production (injected by docker compose) |
+
+Migrations live in `apps/dashboard/drizzle` and are applied automatically on boot.
+Regenerate after schema changes with `pnpm --filter @gigantic/dashboard db:generate`.
+
+In production (`node server.js`, used by the Docker image) a custom entry wraps the
+SvelteKit handler and serves the realtime WebSocket at `/ws`.
 
 ## Repository layout
 

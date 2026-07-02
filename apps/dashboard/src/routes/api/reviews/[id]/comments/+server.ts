@@ -4,7 +4,7 @@ import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ params, request }) => {
 	const body = await request.json();
-	const comment = getEngine().addComment({
+	const comment = (await getEngine()).addComment({
 		changelistId: params.id,
 		filePath: body.filePath,
 		line: body.line,

@@ -30,9 +30,9 @@ export function workspaceName(agentId: string): string {
 }
 
 export async function getChangelists(): Promise<Changelist[]> {
-	return getEngine().state.changelists;
+	return (await getEngine()).state.changelists;
 }
 
 export async function getChangelist(id: string): Promise<Changelist | undefined> {
-	return getEngine().state.changelists.find((c) => c.id === id || String(c.number) === id);
+	return (await getEngine()).state.changelists.find((c) => c.id === id || String(c.number) === id);
 }

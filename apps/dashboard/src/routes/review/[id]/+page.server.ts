@@ -3,7 +3,7 @@ import { getEngine } from '$lib/server/engine/state';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
-	const { state } = getEngine();
+	const { state } = await getEngine();
 	const changelist = state.changelists.find(
 		(c) => c.id === params.id || String(c.number) === params.id
 	);

@@ -4,7 +4,7 @@ import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.json();
-	const engine = getEngine();
+	const engine = await getEngine();
 	if (body.action === 'reaction') {
 		engine.toggleReaction(body.postId, body.emoji, body.by ?? 'human:PO');
 		return json({ ok: true });

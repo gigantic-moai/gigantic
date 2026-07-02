@@ -87,6 +87,12 @@
 				실시간 {$connected ? '연결됨' : '연결 대기'}
 			</div>
 			<div class="mt-1.5">Perforce: <span class="font-mono">{data.settings.p4.depot}</span></div>
+			<div class="mt-0.5">
+				저장소:
+				<span class="font-mono">
+					{data.storage === 'postgres' ? 'PostgreSQL' : data.storage === 'pglite' ? 'PGlite (내장)' : '인메모리 mock'}
+				</span>
+			</div>
 			<div class="mt-0.5">밤에는 에이전트가, 아침에는 사람이 🗿</div>
 		</div>
 	</aside>

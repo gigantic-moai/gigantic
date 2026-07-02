@@ -3,7 +3,7 @@ import { getEngine } from '$lib/server/engine/state';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
-	const { state } = getEngine();
+	const { state } = await getEngine();
 	const agent = state.agents.find((a) => a.id === params.id);
 	if (!agent) error(404, '에이전트를 찾을 수 없습니다');
 	return {

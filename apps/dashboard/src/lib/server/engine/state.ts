@@ -24,6 +24,8 @@ import type {
 } from '@gigantic/shared';
 import { ONBOARDING_STEPS } from '@gigantic/shared';
 import { islandFromKnowledge } from '$lib/island';
+import { connectDb, type DbHandle, type StorageMode } from '../db';
+import { loadState, persistAll } from '../db/store';
 import {
 	seedAgents,
 	seedChangelists,
@@ -59,7 +61,34 @@ export interface EngineState {
 }
 
 /** 상태 스키마가 바뀌면 올린다 — HMR로 살아남은 구버전 싱글턴을 폐기 */
-const ENGINE_VERSION = 3;
+const ENGINE_VERSION = 4;
+
+/** 시드에서 초기 엔진 상태를 만든다. .env 값이 있으면 초기 설정에 반영. */
+export function buildSeedState(): EngineState {
+	const project = structuredClone(seedProject);
+	const settings = structuredClone(seedSettings);
+	if (env.P4PORT) settings.p4.port = env.P4PORT;
+	if (env.P4USER) settings.p4.user = env.P4USER;
+	if (env.P4DEPOT) settings.p4.depot = env.P4DEPOT;
+	if (env.DASHBOARD_PORT) settings.network.dashboardPort = Number(env.DASHBOARD_PORT);
+	if (env.ORCHESTRATOR_PORT) settings.network.orchestratorPort = Number(env.ORCHESTRATOR_PORT);
+	return {
+		settings,
+		project: {
+			...project,
+			island: islandFromKnowledge('gigantic-project', project.knowledge)
+		},
+		agents: structuredClone(seedAgents),
+		issues: structuredClone(seedIssues),
+		changelists: structuredClone(seedChangelists),
+		comments: structuredClone(seedComments),
+		knowledge: structuredClone(seedKnowledge),
+		contracts: structuredClone(seedContracts),
+		scrum: structuredClone(seedScrum),
+		kpi: structuredClone(seedKpi),
+		seq: 1000
+	};
+}
 
 interface WsLike {
 	readyState: number;
@@ -69,36 +98,36 @@ interface WsLike {
 class Engine {
 	state: EngineState;
 	timer: ReturnType<typeof setInterval> | undefined;
+	/** 영속화 대상 DB — null이면 인메모리 mock 모드 */
+	private db: DbHandle | null;
+	private persistTimer: ReturnType<typeof setTimeout> | undefined;
 
-	constructor() {
-		const project = structuredClone(seedProject);
-		const settings = structuredClone(seedSettings);
-		// .env 값이 있으면 초기 설정으로 반영 — 이후 변경은 대시보드에서
-		if (env.P4PORT) settings.p4.port = env.P4PORT;
-		if (env.P4USER) settings.p4.user = env.P4USER;
-		if (env.P4DEPOT) settings.p4.depot = env.P4DEPOT;
-		if (env.DASHBOARD_PORT) settings.network.dashboardPort = Number(env.DASHBOARD_PORT);
-		if (env.ORCHESTRATOR_PORT) settings.network.orchestratorPort = Number(env.ORCHESTRATOR_PORT);
-		this.state = {
-			settings,
-			project: {
-				...project,
-				island: islandFromKnowledge('gigantic-project', project.knowledge)
-			},
-			agents: structuredClone(seedAgents),
-			issues: structuredClone(seedIssues),
-			changelists: structuredClone(seedChangelists),
-			comments: structuredClone(seedComments),
-			knowledge: structuredClone(seedKnowledge),
-			contracts: structuredClone(seedContracts),
-			scrum: structuredClone(seedScrum),
-			kpi: structuredClone(seedKpi),
-			seq: 1000,
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		} as EngineState;
+	get storageMode(): StorageMode {
+		return this.db?.mode ?? 'memory';
+	}
+
+	constructor(db: DbHandle | null, state: EngineState) {
+		this.db = db;
+		this.state = state;
 		this.timer = setInterval(() => this.tick(), 8000);
 		// Node가 이 타이머 때문에 종료를 막지 않도록
 		if (typeof this.timer === 'object' && 'unref' in this.timer) this.timer.unref();
+	}
+
+	/**
+	 * 변경 스냅샷을 디바운스로 저장 — 데이터가 작아 전체 교체가 단순하고 안전하다.
+	 * 실패해도 대시보드 동작은 계속된다(다음 변경에서 재시도).
+	 */
+	private schedulePersist() {
+		if (!this.db) return;
+		clearTimeout(this.persistTimer);
+		this.persistTimer = setTimeout(() => {
+			persistAll(this.db!.db, this.state).catch((err) =>
+				console.error('[gigantic] DB 영속화 실패:', err)
+			);
+		}, 800);
+		if (typeof this.persistTimer === 'object' && 'unref' in this.persistTimer)
+			this.persistTimer.unref();
 	}
 
 	nextId(prefix: string): string {
@@ -127,6 +156,7 @@ class Engine {
 
 	changed(scope: string) {
 		this.broadcast({ type: 'state-changed', scope });
+		this.schedulePersist();
 	}
 
 	heartbeat() {
@@ -556,6 +586,7 @@ class Engine {
 			createdAt: new Date().toISOString()
 		});
 		this.changed('agents');
+		this.changed('scrum');
 		return { ok: true };
 	}
 
@@ -618,14 +649,35 @@ class Engine {
 	}
 }
 
-export function getEngine(): Engine {
+async function boot(): Promise<Engine> {
+	let handle: DbHandle | null = null;
+	try {
+		handle = await connectDb();
+	} catch (err) {
+		console.error('[gigantic] DB 연결 실패 — 인메모리 mock 모드로 대체합니다:', err);
+	}
+	if (!handle) return new Engine(null, buildSeedState());
+
+	const existing = await loadState(handle.db);
+	if (existing) {
+		console.log(`[gigantic] DB(${handle.mode})에서 상태 복원 완료`);
+		return new Engine(handle, existing);
+	}
+	// 빈 DB — 시드 후 즉시 저장
+	const state = buildSeedState();
+	await persistAll(handle.db, state);
+	console.log(`[gigantic] DB(${handle.mode}) 최초 시드 완료`);
+	return new Engine(handle, state);
+}
+
+export async function getEngine(): Promise<Engine> {
 	const g = globalThis as Record<string, unknown>;
-	if (!g.__giganticEngine || g.__giganticEngineVersion !== ENGINE_VERSION) {
+	if (!g.__giganticEnginePromise || g.__giganticEngineVersion !== ENGINE_VERSION) {
 		// HMR로 살아남은 구버전 엔진은 타이머를 멈추고 폐기
-		const prev = g.__giganticEngine as Engine | undefined;
-		if (prev?.timer) clearInterval(prev.timer);
-		g.__giganticEngine = new Engine();
+		const prev = g.__giganticEnginePromise as Promise<Engine> | undefined;
+		prev?.then((e) => clearInterval(e.timer)).catch(() => {});
+		g.__giganticEnginePromise = boot();
 		g.__giganticEngineVersion = ENGINE_VERSION;
 	}
-	return g.__giganticEngine as Engine;
+	return g.__giganticEnginePromise as Promise<Engine>;
 }

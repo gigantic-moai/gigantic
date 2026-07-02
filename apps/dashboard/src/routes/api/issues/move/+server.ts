@@ -4,6 +4,6 @@ import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const { issueId, status } = await request.json();
-	getEngine().moveIssue(issueId, status);
+	(await getEngine()).moveIssue(issueId, status);
 	return json({ ok: true });
 };

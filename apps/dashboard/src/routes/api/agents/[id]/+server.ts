@@ -4,7 +4,7 @@ import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ params, request }) => {
 	const body = await request.json();
-	const engine = getEngine();
+	const engine = await getEngine();
 	switch (body.action) {
 		case 'approve-onboarding': {
 			const r = engine.approveOnboarding(params.id);
