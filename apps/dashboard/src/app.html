@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko" class="dark" data-theme="dark" data-accent="gold">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Gigantic 🗿</title>
+		<script>
+			// FOUC 방지 — 저장된 테마를 첫 페인트 전에 반영
+			try {
+				var giganticTheme = JSON.parse(localStorage.getItem('gigantic-theme') || 'null');
+				if (giganticTheme) {
+					document.documentElement.dataset.theme = giganticTheme.mode || 'dark';
+					document.documentElement.dataset.accent = giganticTheme.accent || 'gold';
+				}
+			} catch (e) {}
+		</script>
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover" class="bg-moai-bg text-moai-text">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>

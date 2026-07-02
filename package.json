@@ -1,0 +1,20 @@
+{
+  "name": "gigantic",
+  "private": true,
+  "version": "0.1.0",
+  "description": "🗿 Gigantic (Moai) — Unreal Engine Agentic Development Platform. AI agents write code overnight, humans review in the morning.",
+  "scripts": {
+    "dev": "pnpm --filter @gigantic/dashboard dev",
+    "build": "pnpm --filter @gigantic/dashboard build",
+    "preview": "pnpm --filter @gigantic/dashboard preview",
+    "check": "pnpm --filter @gigantic/dashboard check"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
