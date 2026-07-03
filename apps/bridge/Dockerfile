@@ -7,7 +7,8 @@ COPY apps/bridge/package.json apps/bridge/
 RUN pnpm install --frozen-lockfile=false
 COPY packages/shared packages/shared
 COPY apps/bridge apps/bridge
-RUN pnpm --filter @gigantic/bridge --prod deploy /prod
+# --legacy: pnpm v10의 injected-workspace 요구 우회 — 워크스페이스 패키지를 복사 배치
+RUN pnpm --filter @gigantic/bridge --prod deploy --legacy /prod
 
 FROM node:22-alpine
 WORKDIR /app

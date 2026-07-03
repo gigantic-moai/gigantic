@@ -9,7 +9,8 @@ COPY packages/shared packages/shared
 COPY apps/dashboard apps/dashboard
 RUN pnpm --filter @gigantic/dashboard build
 # 런타임 전용 node_modules (ws, pg, pglite, drizzle-orm)
-RUN pnpm --filter @gigantic/dashboard --prod deploy /prod
+# --legacy: pnpm v10의 injected-workspace 요구 우회 — 워크스페이스 패키지를 복사 배치
+RUN pnpm --filter @gigantic/dashboard --prod deploy --legacy /prod
 
 FROM node:22-alpine
 WORKDIR /app
